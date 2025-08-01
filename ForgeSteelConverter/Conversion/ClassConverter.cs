@@ -178,6 +178,12 @@ public static class ClassConverter
                 ConvertDamageModifierFeature(builder, feature, indent, isLast); break;
             case "Language":
                 ConvertLanguageFeature(builder, feature, indent, isLast); break;
+            case "Skill":
+                ConvertSkillFeature(builder, feature, indent, isLast); break;
+            case "Characteristic Bonus":
+                ConvertCharacteristicBonusFeature(builder, feature, indent, isLast); break;
+            case "Heroic Resource Gain":
+                ConvertHeroicResourceGainFeature(builder, feature, indent, isLast); break;
             default:
                 builder.AppendLine($"ERROR: UNKNOWN FEATURE"); break;
         }
@@ -197,7 +203,7 @@ public static class ClassConverter
             builder.AppendLine($"{indent}\tdescription: {SanitizeValue(feature.description)},");
         }
         builder.Append($"{indent}\tfield: FeatureField.{feature.data.field}");
-        if (feature.data.value != 0)
+        if (feature.data.value is int valueInt && valueInt > 0)
         {
             builder.AppendLine(",");
             builder.Append($"{indent}\tvalue: {feature.data.value}");
@@ -574,6 +580,47 @@ public static class ClassConverter
         builder.AppendLine("FactoryLogic.feature.createLanguage({");
         builder.AppendLine($"{indent}\tid: '{feature.id}',");
         builder.AppendLine($"{indent}\tlanguage: {SanitizeValue(feature.data.language)}");
+        builder.AppendLine($"{indent}}}){ending}");
+    }
+
+    private static void ConvertSkillFeature(StringBuilder builder, Feature feature, string indent, bool isLast)
+    {
+        string ending = isLast ? string.Empty : ",";
+        builder.AppendLine("FactoryLogic.feature.createSkill({");
+        builder.AppendLine($"{indent}\tid: '{feature.id}',");
+        if(feature.name != feature.data.skill)
+        {
+            builder.AppendLine($"{indent}\tname: {SanitizeValue(feature.name)}");
+        }
+        builder.AppendLine($"{indent}\tskill: {SanitizeValue(feature.data.skill)}");
+        builder.AppendLine($"{indent}}}){ending}");
+    }
+
+    private static void ConvertCharacteristicBonusFeature(StringBuilder builder, Feature feature, string indent, bool isLast)
+    {
+        string ending = isLast ? string.Empty : ",";
+        builder.AppendLine("FactoryLogic.feature.createLanguage({");
+        builder.AppendLine($"{indent}\tid: '{feature.id}',");
+        if (feature.name != feature.data.characteristic)
+        {
+            builder.AppendLine($"{indent}\tname: {SanitizeValue(feature.name)},");
+        }
+        builder.AppendLine($"{indent}\tcharacteristic: {SanitizeValue(feature.data.characteristic)},");
+        builder.AppendLine($"{indent}\tvalue: {feature.data.value}");
+        builder.AppendLine($"{indent}}}){ending}");
+    }
+
+    private static void ConvertHeroicResourceGainFeature(StringBuilder builder, Feature feature, string indent, bool isLast)
+    {
+        string ending = isLast ? string.Empty : ",";
+        builder.AppendLine("FactoryLogic.feature.createLanguage({");
+        builder.AppendLine($"{indent}\tid: '{feature.id}',");
+        if (feature.name != "Herioc Resource Gain")
+        {
+            builder.AppendLine($"{indent}\tname: {SanitizeValue(feature.name)},");
+        }
+        builder.AppendLine($"{indent}\ttrigger: {SanitizeValue(feature.data.trigger)},");
+        builder.AppendLine($"{indent}\tvalue: {SanitizeValue(feature.data.value)}");
         builder.AppendLine($"{indent}}}){ending}");
     }
 

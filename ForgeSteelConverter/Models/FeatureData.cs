@@ -7,7 +7,25 @@ public class FeatureData
 {
     public string field { get; set; }
 
-    public int value { get; set; }
+    private object _value;
+    public object value
+    {
+        get => _value; set
+        {
+            if (value is JsonElement element)
+            {
+                switch (element.ValueKind)
+                {
+                    case JsonValueKind.String:
+                        _value = element.GetString(); break;
+                    case JsonValueKind.Number:
+                        _value = element.GetInt32(); break;
+                    default:
+                        Debugger.Break(); break;
+                }
+            }
+        }
+    }
 
     public int valuePerLevel { get; set; }
 
@@ -98,4 +116,10 @@ public class FeatureData
     public string details { get; set; }
 
     public bool canBeNegative { get; set; }
+
+    public string skill { get; set; }
+
+    public string characteristic { get; set; }
+
+    public string trigger { get; set; }
 }
