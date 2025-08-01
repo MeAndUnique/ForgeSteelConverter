@@ -633,6 +633,7 @@ public static class ClassConverter
                 builder.AppendLine("),");
                 break;
             case "Action":
+            case "Main Action":
                 builder.Append($"{indent}\ttype: FactoryLogic.type.createMain(");
                 if(type.qualifiers.Length > 0)
                 {
