@@ -599,13 +599,13 @@ public static class ClassConverter
     private static void ConvertCharacteristicBonusFeature(StringBuilder builder, Feature feature, string indent, bool isLast)
     {
         string ending = isLast ? string.Empty : ",";
-        builder.AppendLine("FactoryLogic.feature.createLanguage({");
+        builder.AppendLine("FactoryLogic.feature.createCharacteristicBonus({");
         builder.AppendLine($"{indent}\tid: '{feature.id}',");
         if (feature.name != feature.data.characteristic)
         {
             builder.AppendLine($"{indent}\tname: {SanitizeValue(feature.name)},");
         }
-        builder.AppendLine($"{indent}\tcharacteristic: {SanitizeValue(feature.data.characteristic)},");
+        builder.AppendLine($"{indent}\tcharacteristic: Characteristic.{feature.data.characteristic},");
         builder.AppendLine($"{indent}\tvalue: {feature.data.value}");
         builder.AppendLine($"{indent}}}){ending}");
     }
@@ -613,7 +613,7 @@ public static class ClassConverter
     private static void ConvertHeroicResourceGainFeature(StringBuilder builder, Feature feature, string indent, bool isLast)
     {
         string ending = isLast ? string.Empty : ",";
-        builder.AppendLine("FactoryLogic.feature.createLanguage({");
+        builder.AppendLine("FactoryLogic.feature.createHeroicResourceGain({");
         builder.AppendLine($"{indent}\tid: '{feature.id}',");
         if (feature.name != "Herioc Resource Gain")
         {
