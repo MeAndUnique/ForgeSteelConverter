@@ -1,6 +1,6 @@
 ﻿namespace ForgeSteelConverter.Models;
 
-public abstract class Element
+public class Element
 {
 	public string id { get; set; }
 	public string name { get; set; }

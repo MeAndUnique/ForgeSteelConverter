@@ -23,11 +23,13 @@
 
 <PageTitle>Home</PageTitle>
 
-<h1>Forge Steel Hero Class Data Converter</h1>
+<h1>Forge Steel Data Converter</h1>
 
-<p>Upload your ds-class export file here to get a baseline conversion of the TypeScript code for the class. This tool was designed to be feature-complete for the classes as they were presented in the original backer preview packet, and so there is a good chance that not everything will convert perfectly from the fully released version. As such please review the output carefully before submitting for inclusion with Forge Steel's codebase.</p>
+<p>Upload your ds-class or ds-monster-group export file here to get a baseline conversion of the TypeScript code. This tool was designed to be feature-complete for the exports as they were presented in the original backer preview packet, and so there is a good chance that not everything will convert perfectly from the fully released version. As such please review the output carefully before submitting for inclusion with Forge Steel's codebase.</p>
+<p>The biggest thing to check for is that there aren't any instances of "ERROR UNKOWN", which indicates that the export contains a feature that I haven't yet account for. Ping me on Discord if that comes up.</p>
 
-<InputFile OnChange="LoadFile" />
+<h2>Hero Class</h2>
+<InputFile OnChange="LoadHeroFile" />
 
 @if (className is not null)
 {
@@ -39,6 +41,17 @@
     <button @onclick="@(() => DownloadFile(name, file))">@name</button>
 }
 
+<br />
+<br />
+
+<h2>Monster Group</h2>
+<InputFile OnChange="LoadMonsterFile" />
+
+@if (monsterGroupName is not null)
+{
+    <button @onclick="@(() => DownloadFile(monsterGroupName, monsterGroupFile))">@monsterGroupName</button>
+}
+
 @code {
     private string className;
 
@@ -46,7 +59,11 @@
 
     private List<(string name, string file)> subclasses = new();
 
-    private async Task LoadFile(InputFileChangeEventArgs eventArgs)
+    private string monsterGroupName;
+
+    private string monsterGroupFile;
+
+    private async Task LoadHeroFile(InputFileChangeEventArgs eventArgs)
     {
         // This is generally poor practice, however the simplicity is nice for a purpose built app that is running locally.
         string contents = await new StreamReader(eventArgs.File.OpenReadStream()).ReadToEndAsync();
@@ -62,9 +79,18 @@
         }
     }
 
+    private async Task LoadMonsterFile(InputFileChangeEventArgs eventArgs)
+    {
+        // This is generally poor practice, however the simplicity is nice for a purpose built app that is running locally.
+        string contents = await new StreamReader(eventArgs.File.OpenReadStream()).ReadToEndAsync();
+        MonsterGroup monsterGroup = JsonSerializer.Deserialize<MonsterGroup>(contents)!;
+        monsterGroupFile = ClassConverter.ConvertMonsters(monsterGroup);
+        monsterGroupName = ConversionHelpers.GetFileName(monsterGroup.name) + ".ts";
+    }
+
     private async Task DownloadFile(string name, string contents)
     {
-        using MemoryStream stream = new(Encoding.Unicode.GetBytes(contents));
+        using MemoryStream stream = new(Encoding.UTF8.GetBytes(contents));
         using DotNetStreamReference streamReference = new(stream: stream);
         await JS.InvokeVoidAsync("downloadFileFromStream", name, streamReference);
     }

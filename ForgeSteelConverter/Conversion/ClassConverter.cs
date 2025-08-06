@@ -1,6 +1,11 @@
 ﻿using ForgeSteelConverter.Models;
 using Microsoft.AspNetCore.Components;
+using System;
+using System.Linq;
+using System.Reflection.PortableExecutable;
+using System.Security.Authentication;
 using System.Text;
+using System.Threading;
 using static System.Collections.Specialized.BitVector32;
 
 namespace ForgeSteelConverter.Conversion;
@@ -14,6 +19,7 @@ public static class ClassConverter
         import { DamageModifierType } from '../../../enums/damage-modifier-type';
         import { DamageType } from '../../../enums/damage-type';
         import { FactoryLogic } from '../../../logic/factory-logic';
+        import { FeatureAddOnType } from '../../models/feature';
         import { FeatureField } from '../../../enums/feature-field';
         import { HeroClass } from '../../../models/class';
         import { KitArmor } from '../../../enums/kit-armor';
@@ -33,6 +39,21 @@ public static class ClassConverter
         import { FeatureField } from '../../../enums/feature-field';
         import { SkillList } from '../../../enums/skill-list';
         import { SubClass } from '../../../models/subclass';
+
+        """;
+
+    private const string monsterHeader = """
+        import { AbilityDistanceType } from '../../enums/abiity-distance-type';
+        import { AbilityKeyword } from '../../enums/ability-keyword';
+        import { Characteristic } from '../../enums/characteristic';
+        import { DamageModifierType } from '../../enums/damage-modifier-type';
+        import { DamageType } from '../../enums/damage-type';
+        import { FactoryLogic } from '../../logic/factory-logic';
+        import { FeatureAddOnType } from '../../models/feature';
+        import { MonsterGroup } from '../../models/monster';
+        import { MonsterLogic } from '../../logic/monster-logic';
+        import { MonsterOrganizationType } from '../../enums/monster-organization-type';
+        import { MonsterRoleType } from '../../enums/monster-role-type';
 
         """;
 
@@ -85,9 +106,56 @@ public static class ClassConverter
         return (builder.ToString(), subclasses);
     }
 
+    public static string ConvertMonsters(MonsterGroup monsterGroup)
+    {
+        StringBuilder builder = new(monsterHeader);
+        builder.AppendLine();
+        builder.AppendLine($"export const {ConversionHelpers.GetExportName(monsterGroup.name)}: MonsterGroup = {{");
+        builder.AppendLine($"\tid: '{monsterGroup.id}',");
+        builder.AppendLine($"\tname: {SanitizeValue(monsterGroup.name)},");
+        builder.AppendLine($"\tdescription: {SanitizeValue(monsterGroup.description)},");
+        builder.AppendLine("\tpicture: null,");
+        builder.AppendLine("\tinformation: [");
+        for (int index = 0; index < monsterGroup.information.Length; index++)
+        {
+            Element information = monsterGroup.information[index];
+            bool isLast = index == monsterGroup.information.Length - 1;
+            ConvertInformation(builder, information, new('\t', 2), isLast);
+        }
+        builder.AppendLine("\t],");
+        builder.AppendLine("\tmalice: [");
+        for (int index = 0; index < monsterGroup.malice.Length; index++)
+        {
+            Malice malice = monsterGroup.malice[index];
+            bool isLast = index == monsterGroup.malice.Length - 1;
+            ConvertMalice(builder, malice, new('\t', 2), isLast);
+        }
+        builder.AppendLine("\t],");
+        builder.AppendLine("\tmonsters: [");
+        for (int index = 0; index < monsterGroup.monsters.Length; index++)
+        {
+            Monster monster = monsterGroup.monsters[index];
+            bool isLast = index == monsterGroup.monsters.Length - 1;
+            ConvertMonster(builder, monster, new('\t', 2), isLast);
+        }
+        builder.AppendLine("\t],");
+        builder.AppendLine("\taddOns: [");
+        for (int index = 0; index < monsterGroup.addOns.Length; index++)
+        {
+            AddOn addOn = monsterGroup.addOns[index];
+            bool isLast = index == monsterGroup.addOns.Length - 1;
+            ConvertAddOn(builder, addOn, new('\t', 2), isLast);
+        }
+        builder.AppendLine("\t]");
+        builder.AppendLine("};");
+
+        return builder.ToString();
+    }
+
     private static string ConvertSubclass(Subclass subclass)
     {
         StringBuilder builder = new(subclassHeader);
+        builder.AppendLine();
         builder.AppendLine();
         builder.AppendLine($"export const {ConversionHelpers.GetExportName(subclass.name)}: SubClass = {{");
         builder.AppendLine($"\tid: '{subclass.id}',");
@@ -130,13 +198,12 @@ public static class ClassConverter
         {
             Feature feature = features[index];
             bool isLast = index == features.Length - 1;
-            ConvertFeature(builder, feature, false, indent, isLast);
+            ConvertFeature(builder, feature, string.Empty, indent, isLast);
         }
     }
 
-    private static void ConvertFeature(StringBuilder builder, Feature feature, bool fromChoice, string indent, bool isLast)
+    private static void ConvertFeature(StringBuilder builder, Feature feature, string begining, string indent, bool isLast)
     {
-        string begining = fromChoice ? "feature: " : string.Empty;
         builder.Append($"{indent}{begining}");
         switch (feature.type)
         {
@@ -421,7 +488,7 @@ public static class ClassConverter
             Feature featureChoice = (Feature)feature.data.options[index];
             string choiceEnding = index == feature.data.options.Length - 1 ? string.Empty : ",";
             builder.AppendLine($"{indent}\t\t{{");
-            ConvertFeature(builder, featureChoice, true, $"{indent}\t\t\t", false);
+            ConvertFeature(builder, featureChoice, "feature: ", $"{indent}\t\t\t", false);
             builder.AppendLine($"{indent}\t\t\tvalue: 1");
             builder.AppendLine($"{indent}\t\t}}{choiceEnding}");
         }
@@ -487,7 +554,7 @@ public static class ClassConverter
         for (int index = 0; index < feature.data.features.Length; index++)
         {
             Feature featureEntry = feature.data.features[index];
-            ConvertFeature(builder, featureEntry, false, $"{indent}\t\t", index == feature.data.features.Length - 1);
+            ConvertFeature(builder, featureEntry, string.Empty, $"{indent}\t\t", index == feature.data.features.Length - 1);
         }
         builder.AppendLine($"{indent}\t]");
         builder.AppendLine($"{indent}}}){ending}");
@@ -540,6 +607,10 @@ public static class ClassConverter
         {
             ConvertValuePlusPerLevelDamageModifier(builder, damageModifier, indent, isLast);
         }
+        else if (damageModifier.value > 0)
+        {
+            ConvertValueDamageModifier(builder, damageModifier, indent, isLast);
+        }
         else
         {
             builder.AppendLine($"ERROR: UNKNOWN DAMAGE MODIFIER");
@@ -571,6 +642,16 @@ public static class ClassConverter
         builder.AppendLine($"{indent}\tmodifierType: DamageModifierType.{damageModifier.type},");
         builder.AppendLine($"{indent}\tvalue: {damageModifier.value - damageModifier.valuePerLevel},");
         builder.AppendLine($"{indent}\tperLevel: {damageModifier.valuePerLevel}");
+        builder.AppendLine($"{indent}}}){ending}");
+    }
+
+    private static void ConvertValueDamageModifier(StringBuilder builder, DamageModifier damageModifier, string indent, bool isLast)
+    {
+        string ending = isLast ? string.Empty : ",";
+        builder.AppendLine($"{indent}FactoryLogic.damageModifier.create({{");
+        builder.AppendLine($"{indent}\tdamageType: DamageType.{damageModifier.damageType},");
+        builder.AppendLine($"{indent}\tmodifierType: DamageModifierType.{damageModifier.type},");
+        builder.AppendLine($"{indent}\tvalue: {damageModifier.value}");
         builder.AppendLine($"{indent}}}){ending}");
     }
 
@@ -631,7 +712,10 @@ public static class ClassConverter
         builder.AppendLine($"{indent}{begining}FactoryLogic.createAbility({{");
         builder.AppendLine($"{indent}\tid: '{ability.id}',");
         builder.AppendLine($"{indent}\tname: {SanitizeValue(ability.name)},");
-        builder.AppendLine($"{indent}\tdescription: {SanitizeValue(ability.description)},");
+        if (!string.IsNullOrEmpty(ability.description))
+        {
+            builder.AppendLine($"{indent}\tdescription: {SanitizeValue(ability.description)},");
+        }
         ConvertAbilityType(builder, ability.type, indent);
         if (ability.keywords.Length > 0)
         {
@@ -672,10 +756,24 @@ public static class ClassConverter
                 builder.AppendLine("),");
                 break;
             case "Triggered Action":
-                builder.Append($"{indent}\ttype: FactoryLogic.type.createTrigger('{type.trigger}'");
-                if(type.free)
+                builder.Append($"{indent}\ttype: FactoryLogic.type.createTrigger({SanitizeValue(type.trigger)}");
+                if(type.free || type.qualifiers.Length > 0)
                 {
-                    builder.Append(", { free: true }");
+                    builder.Append(", { ");
+                    if(type.free)
+                    {
+                        builder.Append("free: true");
+                    }
+                    if (type.free || type.qualifiers.Length > 0)
+                    {
+                        if (type.free)
+                        {
+                            builder.Append(", ");
+                        }
+                        string qualifiers = string.Join(", ", type.qualifiers.Select(SanitizeValue));
+                        builder.Append($"qualifiers: [ {qualifiers} ]");
+                    }
+                    builder.Append(" }");
                 }
                 builder.AppendLine("),");
                 break;
@@ -691,6 +789,8 @@ public static class ClassConverter
                 break;
             case "No Action":
                 builder.AppendLine($"{indent}\ttype: FactoryLogic.type.createNoAction(),"); break;
+            case "Villain Action":
+                builder.AppendLine($"{indent}\ttype: FactoryLogic.type.createVillainAction(),"); break;
             default:
                 builder.AppendLine($"ERROR: UNKNOWN ABILITY TYPE"); break;
         }
@@ -711,12 +811,11 @@ public static class ClassConverter
         for(int index = 0; index < distances.Length; index++)
         {
             AbilityDistance distance = distances[index];
+            bool checkQualifier = false;
             switch (distance.type)
             {
                 case "Ranged":
                     builder.Append($"FactoryLogic.distance.createRanged({distance.value})"); break;
-                case "Cube":
-                    builder.Append($"FactoryLogic.distance.create({{ type: AbilityDistanceType.Cube, value: {distance.value}, within: {distance.within} }})"); break;
                 case "Melee":
                     builder.Append("FactoryLogic.distance.createMelee(");
                     if(distance.value > 1)
@@ -725,20 +824,38 @@ public static class ClassConverter
                     }
                     builder.Append(")");
                     break;
-                case "Aura":
-                    builder.Append($"FactoryLogic.distance.create({{ type: AbilityDistanceType.Aura, value: {distance.value} }})"); break;
-                case "Burst":
-                    builder.Append($"FactoryLogic.distance.create({{ type: AbilityDistanceType.Burst, value: {distance.value} }})"); break;
                 case "Self":
                     builder.Append("FactoryLogic.distance.createSelf()"); break;
-                case "Wall":
-                    builder.Append($"FactoryLogic.distance.create({{ type: AbilityDistanceType.Wall, value: {distance.value}, within: {distance.within} }})"); break;
-                case "Line":
-                    builder.Append($"FactoryLogic.distance.create({{ type: AbilityDistanceType.Line, value: {distance.value}, value2: {distance.value2}, within: {distance.within} }})"); break;
                 case "Special":
                     builder.Append($"FactoryLogic.distance.createSpecial({SanitizeValue(distance.special)})"); break;
+                case "Cube":
+                case "Aura":
+                case "Burst":
+                case "Wall":
+                case "Line":
+                    builder.Append("FactoryLogic.distance.create({ ");
+                    builder.Append($"type: AbilityDistanceType.{distance.type}, ");
+                    builder.Append($"value: {distance.value}");
+                    if (distance.value2 > 0)
+                    {
+                        builder.Append($", value2: {distance.value2}");
+                    }
+                    if (distance.within > 0)
+                    {
+                        builder.Append($", within: {distance.within}");
+                    }
+                    if (!string.IsNullOrEmpty(distance.qualifier))
+                    {
+                        builder.Append($", qualifier: {SanitizeValue(distance.qualifier)}");
+                    }
+                    builder.Append(" })");
+                    break;
                 default:
                     builder.Append($"ERROR: UNKNOWN ABILITY DISTANCE"); break;
+            }
+            if(checkQualifier)
+            {
+
             }
             if(index < distances.Length - 1)
             {
@@ -783,20 +900,161 @@ public static class ClassConverter
                 builder.AppendLine($"{indent}}}){ending}");
                 break;
             case "roll":
-                string characteristics = string.Join(", ", section.roll.characteristic.Select(characteristic => $"Characteristic.{characteristic}"));
                 builder.AppendLine($"{indent}FactoryLogic.createAbilitySectionRoll(");
-                builder.AppendLine($"{indent}\tFactoryLogic.createPowerRoll({{");
-                builder.AppendLine($"{indent}\t\tcharacteristic: [ {characteristics} ],");
-                builder.AppendLine($"{indent}\t\ttier1: {SanitizeValue(section.roll.tier1)},");
-                builder.AppendLine($"{indent}\t\ttier2: {SanitizeValue(section.roll.tier2)},");
-                builder.AppendLine($"{indent}\t\ttier3: {SanitizeValue(section.roll.tier3)}");
-                builder.AppendLine($"{indent}\t}})");
+                ConvertPowerRoll(builder, section.roll, $"{indent}\t", true);
                 builder.AppendLine($"{indent}){ending}");
                 break;
             default:
                 builder.AppendLine($"ERROR: UNKNOWN ABILITY SECTION"); break;
         }
+    }
 
+    private static void ConvertPowerRoll(StringBuilder builder, Roll roll, string indent, bool isLast)
+    {
+        string ending = isLast ? string.Empty : ",";
+        builder.AppendLine($"{indent}FactoryLogic.createPowerRoll({{");
+        if (roll.characteristic.Length > 0)
+        {
+            string characteristics = string.Join(", ", roll.characteristic.Select(characteristic => $"Characteristic.{characteristic}"));
+            if (roll.characteristic.Length > 1)
+            {
+                characteristics = $"[ {characteristics} ]";
+            }
+            builder.AppendLine($"{indent}\tcharacteristic: {characteristics},");
+        }
+        if(roll.bonus != 0)
+        {
+            builder.AppendLine($"{indent}\tbonus: {roll.bonus},");
+        }
+        builder.AppendLine($"{indent}\ttier1: {SanitizeValue(roll.tier1)},");
+        builder.AppendLine($"{indent}\ttier2: {SanitizeValue(roll.tier2)},");
+        builder.AppendLine($"{indent}\ttier3: {SanitizeValue(roll.tier3)}");
+        builder.AppendLine($"{indent}}}){ending}");
+    }
+
+    private static void ConvertInformation(StringBuilder builder, Element information, string indent, bool isLast)
+    {
+        string ending = isLast ? string.Empty : ",";
+        builder.AppendLine($"{indent}{{");
+        builder.AppendLine($"{indent}\tid: '{information.id}',");
+        builder.AppendLine($"{indent}\tname: {SanitizeValue(information.name)},");
+        builder.AppendLine($"{indent}\tdescription: {SanitizeValue(information.description)}");
+        builder.AppendLine($"{indent}}}{ending}");
+    }
+
+    private static void ConvertMalice(StringBuilder builder, Malice malice, string indent, bool isLast)
+    {
+        string ending = isLast ? string.Empty : ",";
+        builder.AppendLine($"{indent}FactoryLogic.feature.createMalice({{");
+        builder.AppendLine($"{indent}\tid: '{malice.id}',");
+        builder.AppendLine($"{indent}\tname: {SanitizeValue(malice.name)},");
+        builder.AppendLine($"{indent}\tcost: {malice.data.cost},");
+        builder.AppendLine($"{indent}\tsections: [");
+        for (int index = 0; index < malice.data.sections.Count; index++)
+        {
+            object section = malice.data.sections[index];
+            bool isLastSection = index == malice.data.sections.Count - 1;
+            if (section is string)
+            {
+                string sectionEnding = isLastSection ? string.Empty : ",";
+                builder.AppendLine($"{indent}\t\t{SanitizeValue(section)}{sectionEnding}");
+            }
+            else
+            {
+                ConvertPowerRoll(builder, (Roll)section, $"{indent}\t\t", isLastSection);
+            }
+        }
+        builder.AppendLine($"{indent}\t]");
+        builder.AppendLine($"{indent}}}){ending}");
+    }
+
+    private static void ConvertMonster(StringBuilder builder, Monster monster, string indent, bool isLast)
+    {
+        string keyWords = string.Join(", ", monster.keywords.Select(SanitizeValue));
+        string characteristics = string.Join(", ", monster.characteristics.Select(charactertistic => charactertistic.value));
+        string ending = isLast ? string.Empty : ",";
+        builder.AppendLine($"{indent}FactoryLogic.createMonster({{");
+        builder.AppendLine($"{indent}\tid: '{monster.id}',");
+        builder.AppendLine($"{indent}\tname: {SanitizeValue(monster.name)},");
+        if (!string.IsNullOrEmpty(monster.description))
+        {
+            builder.AppendLine($"{indent}\tdescription: {SanitizeValue(monster.description)},");
+        }
+        builder.AppendLine($"{indent}\tlevel: {monster.level},");
+        builder.Append($"{indent}\trole: FactoryLogic.createMonsterRole(MonsterOrganizationType.{monster.role.organization}");
+        if(monster.role.type != "No Role")
+        {
+            builder.Append($", MonsterRoleType.{monster.role.type}");
+        }
+        builder.AppendLine("),");
+        builder.AppendLine($"{indent}\tkeywords: [ {keyWords} ],");
+        builder.AppendLine($"{indent}\tencounterValue: {monster.encounterValue},");
+        builder.Append($"{indent}\tsize: FactoryLogic.createSize({monster.size.value}");
+        if (!string.IsNullOrEmpty(monster.size.mod))
+        {
+            builder.Append($", '{monster.size.mod}'");
+        }
+        builder.AppendLine("),");
+        builder.Append($"{indent}\tspeed: FactoryLogic.createSpeed({monster.speed.value}");
+        if (monster.speed.modes.Length > 0)
+        {
+            string modes = string.Join(", ", monster.speed.modes);
+            builder.Append($", '{modes}'");
+        }
+        builder.AppendLine("),");
+        builder.AppendLine($"{indent}\tstamina: {monster.stamina},");
+        builder.AppendLine($"{indent}\tstability: {monster.stability},");
+        builder.AppendLine($"{indent}\tfreeStrikeDamage: {monster.freeStrikeDamage},");
+        if(!string.IsNullOrEmpty(monster.withCaptain))
+        {
+            builder.AppendLine($"{indent}\twithCaptain: {SanitizeValue(monster.withCaptain)},");
+        }
+        builder.AppendLine($"{indent}\tcharacteristics: MonsterLogic.createCharacteristics({characteristics}),");
+        builder.AppendLine($"{indent}\tfeatures: [");
+        ConvertFeatures(builder, monster.features, $"{indent}\t\t");
+        builder.Append($"{indent}\t]");
+        if(monster.retainer is not null)
+        {
+            builder.AppendLine(",");
+            builder.AppendLine($"{indent}\tretainer: {{");
+            ConvertRetainerLevels(builder, monster.retainer, $"{indent}\t\t");
+            builder.Append($"{indent}\t}}");
+        }
+        builder.AppendLine();
+        builder.AppendLine($"{indent}}}){ending}");
+    }
+
+    private static void ConvertRetainerLevels(StringBuilder builder, Retainer retainer, string indent)
+    {
+        if (retainer.level4 is not null)
+        {
+            ConvertFeature(builder, retainer.level4, "level4: ", indent, retainer.level7 is null);
+        }
+        if (retainer.level7 is not null)
+        {
+            ConvertFeature(builder, retainer.level7, "level7: ", indent, retainer.level10 is null);
+        }
+        if (retainer.level10 is not null)
+        {
+            ConvertFeature(builder, retainer.level10, "level10: ", indent, true);
+        }
+    }
+
+    private static void ConvertAddOn(StringBuilder builder, AddOn addOn, string indent, bool isLast)
+    {
+        string ending = isLast ? string.Empty : ",";
+        builder.AppendLine($"{indent}FactoryLogic.feature.createAddOn({{");
+        builder.AppendLine($"{indent}\tid: '{addOn.id}',");
+        builder.AppendLine($"{indent}\tname: {SanitizeValue(addOn.name)},");
+        builder.AppendLine($"{indent}\tdescription: {SanitizeValue(addOn.description)},");
+        builder.Append($"{indent}\tcategory: FeatureAddOnType.{addOn.data.category}");
+        if(addOn.data.cost > 1)
+        {
+            builder.AppendLine(",");
+            builder.Append($"{indent}\tcost: {addOn.data.cost}");
+        }
+        builder.AppendLine();
+        builder.AppendLine($"{indent}}}){ending}");
     }
 
     private static string SanitizeValue(object value)

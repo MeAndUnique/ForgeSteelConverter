@@ -1,4 +1,6 @@
-﻿namespace ForgeSteelConverter.Conversion;
+﻿using System.Text.RegularExpressions;
+
+namespace ForgeSteelConverter.Conversion;
 
 public static class ConversionHelpers
 {
@@ -17,7 +19,7 @@ public static class ConversionHelpers
             case "Void":
                 return "voidSubclass";
             default:
-                return name.ToLower();
+                return char.ToLower(name[0]) + name[1..].Replace("Echelon", "").Replace(" ", "").Replace(",", "").Replace("—", "");
         }
     }
 
@@ -32,7 +34,9 @@ public static class ConversionHelpers
             case "College of the Harlequin Mask":
                 return "harlequin-mask";
             default:
-                return name.ToLower();
+                name = name.Replace("Echelon", "").Replace(",", "").Replace("—", "").ToLower().Trim();
+                name  =Regex.Replace(name, "\\s+", "-");
+                return name;
         }
     }
 }
